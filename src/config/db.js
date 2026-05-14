@@ -1,13 +1,21 @@
 const { Pool } = require("pg");
 require("dotenv").config();
 
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT, 10),
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-});
+// Support DATABASE_URL (Render, Supabase, Neon, etc.) or individual env vars (local dev)
+const poolConfig = process.env.DATABASE_URL
+  ? {
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }, // Required by most cloud Postgres providers
+    }
+  : {
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT, 10),
+      database: process.env.DB_NAME,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+    };
+
+const pool = new Pool(poolConfig);
 
 // Test connection properly
 const testDB = async () => {
@@ -98,6 +106,7 @@ const initDB = async () => {
     console.log("✅ Tables checked and updated successfully");
   } catch (err) {
     console.error("❌ DB Init Error:", err.message);
+    throw err; // Propagate so server.js can exit with context
   } finally {
     client.release();
   }
