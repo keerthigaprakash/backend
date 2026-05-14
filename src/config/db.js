@@ -2,6 +2,12 @@ const { Pool } = require("pg");
 require("dotenv").config();
 
 // Support DATABASE_URL (Render, Supabase, Neon, etc.) or individual env vars (local dev)
+if (process.env.DATABASE_URL) {
+  console.log('🔗 Using DATABASE_URL for connection');
+} else {
+  console.log(`🔗 Using local DB: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
+}
+
 const poolConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,
@@ -23,7 +29,7 @@ const testDB = async () => {
     await pool.query("SELECT 1");
     console.log("✅ Connected to PostgreSQL database");
   } catch (err) {
-    console.error("❌ Database connection failed:", err.message);
+    console.error("❌ Database connection failed:", err.message || JSON.stringify(err));
   }
 };
 
@@ -39,7 +45,13 @@ pool.on("error", (err) => {
  * Initialise DB
  */
 const initDB = async () => {
-  const client = await pool.connect();
+  let client;
+  try {
+    client = await pool.connect();
+  } catch (err) {
+    console.error("❌ Could not acquire DB client:", err.message || JSON.stringify(err));
+    throw err;
+  }
   try {
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -105,10 +117,10 @@ const initDB = async () => {
 
     console.log("✅ Tables checked and updated successfully");
   } catch (err) {
-    console.error("❌ DB Init Error:", err.message);
+    console.error("❌ DB Init Error:", err.message || JSON.stringify(err));
     throw err; // Propagate so server.js can exit with context
   } finally {
-    client.release();
+    if (client) client.release();
   }
 };
 
