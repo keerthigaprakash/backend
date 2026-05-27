@@ -3,40 +3,58 @@ require("dotenv").config();
 
 // Required local env vars
 const requiredLocalEnv = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"];
+const isProduction = process.env.NODE_ENV === "production";
+const isRender = Boolean(process.env.RENDER);
+const isHostedEnvironment = isProduction || isRender;
+const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
 
 const getMissingLocalEnv = () =>
   requiredLocalEnv.filter((key) => !process.env[key]);
 
-// 🔗 Connection selection
-if (process.env.DATABASE_URL) {
-  console.log("🔗 Using DATABASE_URL for connection");
-} else {
-  const missing = getMissingLocalEnv();
+const createPoolConfig = () => {
+  if (hasDatabaseUrl) {
+    return {
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    };
+  }
 
-  if (missing.length > 0) {
-    console.warn(`⚠️ Missing DB env vars: ${missing.join(", ")}`);
-  } else {
-    console.log(
-      `🔗 Using local DB: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`
+  if (isHostedEnvironment) {
+    throw new Error(
+      "DATABASE_URL is required in production/Render. Add your Render PostgreSQL Internal Database URL as DATABASE_URL."
     );
   }
+
+  const missing = getMissingLocalEnv();
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing DB config: ${missing.join(", ")}. ` +
+        "Set local DB_* values or use DATABASE_URL."
+    );
+  }
+
+  return {
+    host: process.env.DB_HOST,
+    port: Number(process.env.DB_PORT),
+    database: process.env.DB_NAME,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+  };
+};
+
+const poolConfig = createPoolConfig();
+
+// 🔗 Connection selection
+if (hasDatabaseUrl) {
+  console.log("🔗 Using DATABASE_URL for connection");
+} else {
+  console.log(
+    `🔗 Using local DB: ${poolConfig.host}:${poolConfig.port}/${poolConfig.database}`
+  );
 }
 
 // ✅ SAFE pool config
-const pool = new Pool(
-  process.env.DATABASE_URL
-    ? {
-        connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false },
-      }
-    : {
-        host: process.env.DB_HOST,
-        port: Number(process.env.DB_PORT),
-        database: process.env.DB_NAME,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-      }
-);
+const pool = new Pool(poolConfig);
 
 // ❌ Global DB error handling
 pool.on("error", (err) => {
@@ -45,17 +63,6 @@ pool.on("error", (err) => {
 
 // 🚀 INIT DB FUNCTION
 const initDB = async () => {
-  // Only validate local env if DATABASE_URL is NOT used
-  if (!process.env.DATABASE_URL) {
-    const missing = getMissingLocalEnv();
-    if (missing.length > 0) {
-      throw new Error(
-        `Missing DB config: ${missing.join(", ")}. ` +
-          "Use DATABASE_URL on Render."
-      );
-    }
-  }
-
   let client;
 
   try {
