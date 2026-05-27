@@ -44,32 +44,32 @@ const createPoolConfig = () => {
 
 const poolConfig = createPoolConfig();
 
-// 🔗 Connection selection
+// Connection selection
 if (hasDatabaseUrl) {
-  console.log("🔗 Using DATABASE_URL for connection");
+  console.log("Using DATABASE_URL for connection");
 } else {
   console.log(
-    `🔗 Using local DB: ${poolConfig.host}:${poolConfig.port}/${poolConfig.database}`
+    `Using local DB: ${poolConfig.host}:${poolConfig.port}/${poolConfig.database}`
   );
 }
 
-// ✅ SAFE pool config
+// Safe pool config
 const pool = new Pool(poolConfig);
 
-// ❌ Global DB error handling
+// Global DB error handling
 pool.on("error", (err) => {
-  console.error("❌ Unexpected PostgreSQL error:", err.message);
+  console.error("Unexpected PostgreSQL error:", err.message);
 });
 
-// 🚀 INIT DB FUNCTION
+// Init DB function
 const initDB = async () => {
   let client;
 
   try {
     client = await pool.connect();
-    console.log("✅ Connected to PostgreSQL database");
+    console.log("Connected to PostgreSQL database");
   } catch (err) {
-    console.error("❌ Could not acquire DB client:", err.message);
+    console.error("Could not acquire DB client:", err.message);
     throw err;
   }
 
@@ -122,7 +122,7 @@ const initDB = async () => {
       );
     `);
 
-    // 🔁 SAFE MIGRATIONS
+    // Safe migrations
     await client.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'customer';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
@@ -138,9 +138,9 @@ const initDB = async () => {
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS current_lng DECIMAL(11,8);
     `);
 
-    console.log("✅ Database initialized successfully");
+    console.log("Database initialized successfully");
   } catch (err) {
-    console.error("❌ DB Init Error:", err.message);
+    console.error("DB Init Error:", err.message);
     throw err;
   } finally {
     if (client) client.release();
