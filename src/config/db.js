@@ -1,11 +1,21 @@
 const { Pool } = require("pg");
 require("dotenv").config();
 
+const requiredLocalEnv = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"];
+
+const getMissingLocalEnv = () => requiredLocalEnv.filter((key) => !process.env[key]);
+
 // Support DATABASE_URL (Render, Supabase, Neon, etc.) or individual env vars (local dev)
 if (process.env.DATABASE_URL) {
   console.log('🔗 Using DATABASE_URL for connection');
 } else {
-  console.log(`🔗 Using local DB: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
+  const missing = getMissingLocalEnv();
+  if (missing.length > 0) {
+    console.warn(`⚠️ Missing database env vars: ${missing.join(", ")}`);
+    console.warn("   Set DATABASE_URL in production, or set all DB_* variables for local development.");
+  } else {
+    console.log(`🔗 Using local DB: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
+  }
 }
 
 const poolConfig = process.env.DATABASE_URL
@@ -23,18 +33,6 @@ const poolConfig = process.env.DATABASE_URL
 
 const pool = new Pool(poolConfig);
 
-// Test connection properly
-const testDB = async () => {
-  try {
-    await pool.query("SELECT 1");
-    console.log("✅ Connected to PostgreSQL database");
-  } catch (err) {
-    console.error("❌ Database connection failed:", err.message || JSON.stringify(err));
-  }
-};
-
-testDB();
-
 // Error handler
 pool.on("error", (err) => {
   console.error("❌ Unexpected PostgreSQL error:", err.message);
@@ -45,9 +43,18 @@ pool.on("error", (err) => {
  * Initialise DB
  */
 const initDB = async () => {
+  const missing = process.env.DATABASE_URL ? [] : getMissingLocalEnv();
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing database configuration: ${missing.join(", ")}. ` +
+        "On Render, create/connect a PostgreSQL database and set DATABASE_URL in Environment."
+    );
+  }
+
   let client;
   try {
     client = await pool.connect();
+    console.log("✅ Connected to PostgreSQL database");
   } catch (err) {
     console.error("❌ Could not acquire DB client:", err.message || JSON.stringify(err));
     throw err;
