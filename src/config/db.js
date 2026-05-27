@@ -1,65 +1,73 @@
 const { Pool } = require("pg");
 require("dotenv").config();
 
+// Required local env vars
 const requiredLocalEnv = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"];
 
-const getMissingLocalEnv = () => requiredLocalEnv.filter((key) => !process.env[key]);
+const getMissingLocalEnv = () =>
+  requiredLocalEnv.filter((key) => !process.env[key]);
 
-// Support DATABASE_URL (Render, Supabase, Neon, etc.) or individual env vars (local dev)
+// 🔗 Connection selection
 if (process.env.DATABASE_URL) {
-  console.log('🔗 Using DATABASE_URL for connection');
+  console.log("🔗 Using DATABASE_URL for connection");
 } else {
   const missing = getMissingLocalEnv();
+
   if (missing.length > 0) {
-    console.warn(`⚠️ Missing database env vars: ${missing.join(", ")}`);
-    console.warn("   Set DATABASE_URL in production, or set all DB_* variables for local development.");
+    console.warn(`⚠️ Missing DB env vars: ${missing.join(", ")}`);
   } else {
-    console.log(`🔗 Using local DB: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
+    console.log(
+      `🔗 Using local DB: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`
+    );
   }
 }
 
-const poolConfig = process.env.DATABASE_URL
-  ? {
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }, // Required by most cloud Postgres providers
-    }
-  : {
-      host: process.env.DB_HOST,
-      port: parseInt(process.env.DB_PORT, 10),
-      database: process.env.DB_NAME,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-    };
+// ✅ SAFE pool config
+const pool = new Pool(
+  process.env.DATABASE_URL
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false },
+      }
+    : {
+        host: process.env.DB_HOST,
+        port: Number(process.env.DB_PORT),
+        database: process.env.DB_NAME,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+      }
+);
 
-const pool = new Pool(poolConfig);
-
-// Error handler
+// ❌ Global DB error handling
 pool.on("error", (err) => {
   console.error("❌ Unexpected PostgreSQL error:", err.message);
-  process.exit(-1);
 });
 
-/**
- * Initialise DB
- */
+// 🚀 INIT DB FUNCTION
 const initDB = async () => {
-  const missing = process.env.DATABASE_URL ? [] : getMissingLocalEnv();
-  if (missing.length > 0) {
-    throw new Error(
-      `Missing database configuration: ${missing.join(", ")}. ` +
-        "On Render, create/connect a PostgreSQL database and set DATABASE_URL in Environment."
-    );
+  // Only validate local env if DATABASE_URL is NOT used
+  if (!process.env.DATABASE_URL) {
+    const missing = getMissingLocalEnv();
+    if (missing.length > 0) {
+      throw new Error(
+        `Missing DB config: ${missing.join(", ")}. ` +
+          "Use DATABASE_URL on Render."
+      );
+    }
   }
 
   let client;
+
   try {
     client = await pool.connect();
     console.log("✅ Connected to PostgreSQL database");
   } catch (err) {
-    console.error("❌ Could not acquire DB client:", err.message || JSON.stringify(err));
+    console.error("❌ Could not acquire DB client:", err.message);
     throw err;
   }
+
   try {
+    // USERS TABLE
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -71,6 +79,7 @@ const initDB = async () => {
       );
     `);
 
+    // PRODUCTS TABLE
     await client.query(`
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
@@ -83,6 +92,7 @@ const initDB = async () => {
       );
     `);
 
+    // ORDERS TABLE
     await client.query(`
       CREATE TABLE IF NOT EXISTS orders (
         id SERIAL PRIMARY KEY,
@@ -94,38 +104,37 @@ const initDB = async () => {
       );
     `);
 
+    // ORDER ITEMS TABLE
     await client.query(`
       CREATE TABLE IF NOT EXISTS order_items (
         id SERIAL PRIMARY KEY,
         order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
-        product_id INTEGER, -- Optional: removed strict reference to allow static frontend IDs
+        product_id INTEGER,
         quantity INTEGER DEFAULT 1,
         price DECIMAL(10,2)
       );
     `);
 
-    // Migration: ensure columns exist in case tables were created in a previous version
+    // 🔁 SAFE MIGRATIONS
     await client.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'customer';
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-      
+
       ALTER TABLE products ADD COLUMN IF NOT EXISTS image_key VARCHAR(255);
       ALTER TABLE products ADD COLUMN IF NOT EXISTS features JSONB;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-      
+
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_info JSONB;
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_person_id INTEGER REFERENCES users(id);
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS current_lat DECIMAL(10, 8);
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS current_lng DECIMAL(11, 8);
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS current_lat DECIMAL(10,8);
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS current_lng DECIMAL(11,8);
     `);
 
-    console.log("✅ Tables checked and updated successfully");
+    console.log("✅ Database initialized successfully");
   } catch (err) {
-    console.error("❌ DB Init Error:", err.message || JSON.stringify(err));
-    throw err; // Propagate so server.js can exit with context
+    console.error("❌ DB Init Error:", err.message);
+    throw err;
   } finally {
     if (client) client.release();
   }
