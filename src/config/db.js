@@ -1,15 +1,14 @@
 const { Pool } = require("pg");
 require("dotenv").config();
 
-// Required local env vars
-const requiredLocalEnv = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"];
+// Required env vars when DATABASE_URL is not provided
+const requiredDbEnv = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"];
 const isProduction = process.env.NODE_ENV === "production";
 const isRender = Boolean(process.env.RENDER);
 const isHostedEnvironment = isProduction || isRender;
 const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
 
-const getMissingLocalEnv = () =>
-  requiredLocalEnv.filter((key) => !process.env[key]);
+const getMissingDbEnv = () => requiredDbEnv.filter((key) => !process.env[key]);
 
 const createPoolConfig = () => {
   if (hasDatabaseUrl) {
@@ -19,17 +18,15 @@ const createPoolConfig = () => {
     };
   }
 
-  if (isHostedEnvironment) {
-    throw new Error(
-      "DATABASE_URL is required in production/Render. Add your Render PostgreSQL Internal Database URL as DATABASE_URL."
-    );
-  }
-
-  const missing = getMissingLocalEnv();
+  const missing = getMissingDbEnv();
   if (missing.length > 0) {
+    const hostedMessage = isHostedEnvironment
+      ? "In Render, add DATABASE_URL or add all DB_* environment variables."
+      : "Set local DB_* values or use DATABASE_URL.";
+
     throw new Error(
       `Missing DB config: ${missing.join(", ")}. ` +
-        "Set local DB_* values or use DATABASE_URL."
+        hostedMessage
     );
   }
 
