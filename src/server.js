@@ -12,37 +12,43 @@ const app = require('./app');
 const { initDB } = require('./config/db');
 const { initSocket } = require('./socket');
 
-// Parse port from environment variables
+// Parse port from environment variables (Render sets PORT automatically)
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 
 const start = async () => {
-  // Create tables if they don't exist yet
+  // Initialise DB separately so a connection failure doesn't block the server
   try {
     await initDB();
   } catch (dbError) {
-    console.error('⚠️ Database initialization failed:', dbError);
+    console.error('⚠️ Database initialization failed:', dbError.message);
   }
 
-  try {
-    // Create HTTP server from Express app
-    const server = http.createServer(app);
+  // Create HTTP server from Express app
+  const server = http.createServer(app);
 
-    // Attach Socket.IO to the same HTTP server
-    const io = initSocket(server);
+  // Attach Socket.IO to the same HTTP server
+  const io = initSocket(server);
 
-    // Make io accessible to routes via app.locals
-    app.set('io', io);
+  // Make io accessible to routes via app.locals
+  app.set('io', io);
 
-    server.listen(PORT, '0.0.0.0', () => {
-      console.log(`\n🌸 Bloom & Bliss API server running on http://0.0.0.0:${PORT}`);
-      console.log(`   Local network: http://10.186.83.37:${PORT}`);
-      console.log(`   Environment : ${process.env.NODE_ENV || 'development'}`);
-      console.log(`   Health check: http://10.186.83.37:${PORT}/api/health`);
-      console.log(`   🔌 WebSocket: ws://10.186.83.37:${PORT}\n`);
-    });
-  } catch (error) {
-    console.error('❌ Failed to start server:', error);
-  }
+  // Handle port-in-use error gracefully instead of crashing
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${PORT} is already in use. Please free the port and restart.`);
+      process.exit(1);
+    } else {
+      console.error('❌ Server error:', err.message);
+      process.exit(1);
+    }
+  });
+
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n🌸 Bloom & Bliss API server running on http://0.0.0.0:${PORT}`);
+    console.log(`   Environment : ${process.env.NODE_ENV || 'development'}`);
+    console.log(`   Health check: http://0.0.0.0:${PORT}/api/health`);
+    console.log(`   🔌 WebSocket: ws://0.0.0.0:${PORT}\n`);
+  });
 };
 
 start();
