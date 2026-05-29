@@ -22,7 +22,6 @@ const authenticate = (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     req.user = decoded;
-    console.log(`🔐 Authenticated: ${decoded.email} (${decoded.role})`);
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -45,7 +44,6 @@ const authenticate = (req, res, next) => {
 const authorize = (...roles) => {
   return (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
-      console.log(`🚫 Authorization failed for ${req.user?.email}. Required: [${roles.join(', ')}], Found: ${req.user?.role}`);
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to perform this action.',

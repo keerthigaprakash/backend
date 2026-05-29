@@ -1,77 +1,38 @@
 const { Pool } = require("pg");
 require("dotenv").config();
 
-// Required env vars when DATABASE_URL is not provided
-const requiredDbEnv = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"];
-const isProduction = process.env.NODE_ENV === "production";
-const isRender = Boolean(process.env.RENDER);
-const isHostedEnvironment = isProduction || isRender;
-const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
-
-const getMissingDbEnv = () => requiredDbEnv.filter((key) => !process.env[key]);
-
-const createPoolConfig = () => {
-  if (hasDatabaseUrl) {
-    return {
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-    };
-  }
-
-  const missing = getMissingDbEnv();
-  if (missing.length > 0) {
-    const hostedMessage = isHostedEnvironment
-      ? "In Render, add DATABASE_URL or add all DB_* environment variables."
-      : "Set local DB_* values or use DATABASE_URL.";
-
-    throw new Error(
-      `Missing DB config: ${missing.join(", ")}. ` +
-        hostedMessage
-    );
-  }
-
-  return {
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT),
-    database: process.env.DB_NAME,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-  };
-};
-
-const poolConfig = createPoolConfig();
-
-// Connection selection
-if (hasDatabaseUrl) {
-  console.log("Using DATABASE_URL for connection");
-} else {
-  console.log(
-    `Using local DB: ${poolConfig.host}:${poolConfig.port}/${poolConfig.database}`
-  );
-}
-
-// Safe pool config
-const pool = new Pool(poolConfig);
-
-// Global DB error handling
-pool.on("error", (err) => {
-  console.error("Unexpected PostgreSQL error:", err.message);
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT, 10),
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
 });
 
-// Init DB function
-const initDB = async () => {
-  let client;
-
+// Test connection properly
+const testDB = async () => {
   try {
-    client = await pool.connect();
-    console.log("Connected to PostgreSQL database");
+    await pool.query("SELECT 1");
+    console.log("✅ Connected to PostgreSQL database");
   } catch (err) {
-    console.error("Could not acquire DB client:", err.message);
-    throw err;
+    console.error("❌ Database connection failed:", err.message);
   }
+};
 
+testDB();
+
+// Error handler
+pool.on("error", (err) => {
+  console.error("❌ Unexpected PostgreSQL error:", err.message);
+  process.exit(-1);
+});
+
+/**
+ * Initialise DB
+ */
+const initDB = async () => {
+  const client = await pool.connect();
   try {
-    // USERS TABLE
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -83,7 +44,6 @@ const initDB = async () => {
       );
     `);
 
-    // PRODUCTS TABLE
     await client.query(`
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
@@ -96,7 +56,6 @@ const initDB = async () => {
       );
     `);
 
-    // ORDERS TABLE
     await client.query(`
       CREATE TABLE IF NOT EXISTS orders (
         id SERIAL PRIMARY KEY,
@@ -108,39 +67,39 @@ const initDB = async () => {
       );
     `);
 
-    // ORDER ITEMS TABLE
     await client.query(`
       CREATE TABLE IF NOT EXISTS order_items (
         id SERIAL PRIMARY KEY,
         order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
-        product_id INTEGER,
+        product_id INTEGER, -- Optional: removed strict reference to allow static frontend IDs
         quantity INTEGER DEFAULT 1,
         price DECIMAL(10,2)
       );
     `);
 
-    // Safe migrations
+    // Migration: ensure columns exist in case tables were created in a previous version
     await client.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'customer';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-
+      
       ALTER TABLE products ADD COLUMN IF NOT EXISTS image_key VARCHAR(255);
       ALTER TABLE products ADD COLUMN IF NOT EXISTS features JSONB;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-
+      
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_info JSONB;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_person_id INTEGER REFERENCES users(id);
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS current_lat DECIMAL(10,8);
-      ALTER TABLE orders ADD COLUMN IF NOT EXISTS current_lng DECIMAL(11,8);
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS current_lat DECIMAL(10, 8);
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS current_lng DECIMAL(11, 8);
     `);
 
-    console.log("Database initialized successfully");
+    console.log("✅ Tables checked and updated successfully");
   } catch (err) {
-    console.error("DB Init Error:", err.message);
-    throw err;
+    console.error("❌ DB Init Error:", err.message);
   } finally {
-    if (client) client.release();
+    client.release();
   }
 };
 
