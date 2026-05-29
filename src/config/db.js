@@ -22,7 +22,7 @@ const testDB = async () => {
     await pool.query("SELECT 1");
     console.log("✅ Connected to PostgreSQL database");
   } catch (err) {
-    console.error("❌ Database connection failed:", err.message);
+    console.error("❌ Database connection failed:", err);
   }
 };
 

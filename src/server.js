@@ -36,7 +36,7 @@ const start = async () => {
       console.log(`   🔌 WebSocket: ws://10.186.83.37:${PORT}\n`);
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error.message);
+    console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
 };
