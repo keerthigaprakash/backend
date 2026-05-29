@@ -89,30 +89,33 @@ const registerUser = async ({ name, email, password }) => {
 };
 
 const loginUser = async ({ email, password }) => {
-  // Hardcoded admin credentials check
-  if (email === 'admin123@gmail.com' && password === 'admin12345') {
-    const adminUser = { id: 'admin-id', name: 'Admin', email, role: 'admin' };
-    const token = generateToken(adminUser);
-    return { user: adminUser, token };
-  }
-
-  // Regular user lookup
   const user = await model.findUserByEmail(email);
   if (!user) {
-    const error = new Error('Invalid email or password.');
+    if (email === 'admin123@gmail.com' && password === 'admin12345') {
+      const adminUser = { id: 'admin-id', name: 'Admin', email, role: 'admin' };
+      const token = generateToken(adminUser);
+      return { user: adminUser, token };
+    }
+
+    const error = new Error('User not found. Please sign up before logging in.');
     error.statusCode = 401;
     throw error;
   }
 
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) {
-    const error = new Error('Invalid email or password.');
+    const error = new Error('Invalid email or password. Please sign up first if you are new.');
     error.statusCode = 401;
     throw error;
   }
 
   // Strip password from response
-  const { password: _, ...safeUser } = user;
+  let { password: _, ...safeUser } = user;
+
+  if (email === 'admin123@gmail.com' && safeUser.role !== 'admin') {
+    safeUser = await model.updateUserRole(user.id, 'admin');
+  }
+
   const token = generateToken(safeUser);
   return { user: safeUser, token };
 };

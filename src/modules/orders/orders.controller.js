@@ -75,6 +75,25 @@ const assignOrder = async (req, res) => {
   try {
     const { orderId, deliveryPersonId } = req.body;
     const order = await service.assignOrder(orderId, deliveryPersonId);
+    const fullOrder = await service.getOrderById(orderId);
+    const io = req.app.get('io');
+
+    if (io && fullOrder) {
+      const payload = {
+        order_id: fullOrder.id,
+        status: fullOrder.status,
+        order: fullOrder,
+      };
+
+      if (fullOrder.user_id) {
+        io.to(`user_${fullOrder.user_id}`).emit('orderStatusUpdate', payload);
+      }
+
+      io.to(`user_${deliveryPersonId}`).emit('orderAssigned', fullOrder);
+      io.to(`order_${orderId}`).emit('orderStatusUpdate', payload);
+      io.to('admin_room').emit('orderStatusUpdate', payload);
+    }
+
     res.json({ success: true, data: order });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to assign order.' });

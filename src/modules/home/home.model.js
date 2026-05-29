@@ -185,6 +185,19 @@ const findUserByEmail = async (email) => {
   }
 };
 
+const updateUserRole = async (id, role) => {
+  try {
+    const { rows } = await pool.query(
+      'UPDATE users SET role = $1 WHERE id = $2 RETURNING id, name, email, role, created_at',
+      [role, id]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    console.error('Error updating user role:', err);
+    throw err;
+  }
+};
+
 const createUser = async ({ name, email, password, role }) => {
   try {
     const { rows } = await pool.query(
@@ -210,5 +223,6 @@ module.exports = {
   getCategories,
   getCategoryCounts,
   findUserByEmail,
+  updateUserRole,
   createUser,
 };
