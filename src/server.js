@@ -12,6 +12,7 @@ const app = require('./app');
 const { initDB } = require('./config/db');
 const { initSocket } = require('./socket');
 
+// Parse port from environment variables
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 
 const start = async () => {
