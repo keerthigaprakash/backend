@@ -16,10 +16,14 @@ const { initSocket } = require('./socket');
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 
 const start = async () => {
+  // Create tables if they don't exist yet
   try {
-    // Create tables if they don't exist yet
     await initDB();
+  } catch (dbError) {
+    console.error('⚠️ Database initialization failed:', dbError);
+  }
 
+  try {
     // Create HTTP server from Express app
     const server = http.createServer(app);
 
@@ -37,7 +41,7 @@ const start = async () => {
       console.log(`   🔌 WebSocket: ws://10.186.83.37:${PORT}\n`);
     });
   } catch (error) {
-    console.error('⚠️ Failed to initialise DB during startup, but keeping server alive:', error);
+    console.error('❌ Failed to start server:', error);
   }
 };
 
