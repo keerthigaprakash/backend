@@ -3,7 +3,16 @@ require("dotenv").config();
 
 // Configured for local & Render database connections
 
-const pool = process.env.DATABASE_URL
+if (process.env.DATABASE_URL) {
+  if (process.env.DATABASE_URL.includes("dashboard.render.com") || process.env.DATABASE_URL.includes("deploys")) {
+    console.error("\n❌ ERROR: Your DATABASE_URL environment variable is configured with a Render dashboard link!");
+    console.error("   It must be a PostgreSQL connection string (starting with postgres:// or postgresql://)\n");
+  }
+} else {
+  console.warn("\n⚠️ WARNING: DATABASE_URL is not set. Falling back to DB_HOST or localhost.\n");
+}
+
+const pool = process.env.DATABASE_URL && !process.env.DATABASE_URL.includes("dashboard.render.com")
   ? new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
