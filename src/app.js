@@ -21,15 +21,32 @@ app.use(cors({
     if (!origin || /^http:\/\/localhost:\d+$/.test(origin)) {
       return callback(null, true);
     }
-    // Production: allow the Render frontend URL if set
+
     const allowedOrigins = [
-      'https://backend-4qls.onrender.com',
       process.env.FRONTEND_URL,
-    ].filter(Boolean);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+      ...(process.env.ALLOWED_ORIGINS || '').split(',').map((url) => url.trim()),
+      'https://frontend-nine-alpha-79.vercel.app',
+    ]
+      .filter(Boolean)
+      .map((url) => url.replace(/\/$/, '')); // normalize trailing slash
+
+    const normalizedOrigin = origin.replace(/\/$/, '');
+    if (allowedOrigins.includes(normalizedOrigin)) {
+      return callback(null, true);
+    }
+
+    // Allow any Vercel frontend domain if not explicitly configured.
+    if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(normalizedOrigin)) {
+      return callback(null, true);
+    }
+
     callback(new Error(`CORS: origin ${origin} not allowed`));
   },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
