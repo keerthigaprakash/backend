@@ -20,7 +20,10 @@ const start = async () => {
   try {
     await initDB();
   } catch (dbError) {
-    console.error('⚠️ Database initialization failed:', dbError.message);
+    console.error('⚠️ Database initialization failed:', dbError.message || dbError);
+    if (dbError.stack) {
+      console.error(dbError.stack);
+    }
   }
 
   // Create HTTP server from Express app

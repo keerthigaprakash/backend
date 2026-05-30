@@ -15,7 +15,22 @@ const app = express();
 
 /* ──── Global middleware ──────────────────────────────────────────── */
 
-app.use(cors({ origin: 'http://localhost:5174', credentials: true }));
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests from any localhost port (dev) or no origin (Postman / same-origin)
+    if (!origin || /^http:\/\/localhost:\d+$/.test(origin)) {
+      return callback(null, true);
+    }
+    // Production: allow the Render frontend URL if set
+    const allowedOrigins = [
+      'https://backend-4qls.onrender.com',
+      process.env.FRONTEND_URL,
+    ].filter(Boolean);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

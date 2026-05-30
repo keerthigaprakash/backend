@@ -156,15 +156,18 @@ const register = async (req, res) => {
   try {
     const { valid, errors } = schema.validateRegister(req.body);
     if (!valid) {
-      return res.status(400).json({ success: false, errors });
+      const message = errors.join(', ');
+      return res.status(400).json({ success: false, message, errors });
     }
 
     const result = await service.registerUser(req.body);
     res.status(201).json({ success: true, data: result });
   } catch (error) {
+    console.error('Register error:', error);
     res.status(error.statusCode || 500).json({
       success: false,
       message: error.message || 'Registration failed.',
+      errors: error.errors || [],
     });
   }
 };
@@ -176,15 +179,18 @@ const login = async (req, res) => {
   try {
     const { valid, errors } = schema.validateLogin(req.body);
     if (!valid) {
-      return res.status(400).json({ success: false, errors });
+      const message = errors.join(', ');
+      return res.status(400).json({ success: false, message, errors });
     }
 
     const result = await service.loginUser(req.body);
     res.json({ success: true, data: result });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(error.statusCode || 500).json({
       success: false,
       message: error.message || 'Login failed.',
+      errors: error.errors || [],
     });
   }
 };

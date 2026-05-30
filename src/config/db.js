@@ -1,29 +1,56 @@
 const { Pool } = require("pg");
 require("dotenv").config();
 
-// Use DATABASE_URL (Render) if available, otherwise use individual env vars (local dev)
-const poolConfig = process.env.DATABASE_URL
+const isProduction = process.env.NODE_ENV === "production";
+const hasDatabaseUrl = !!process.env.DATABASE_URL;
+
+// Parse connection details for safe logging
+let connectionDetails = "";
+if (hasDatabaseUrl) {
+  try {
+    const parsed = new URL(process.env.DATABASE_URL);
+    connectionDetails = `host: ${parsed.hostname}, database: ${parsed.pathname.substring(1)}`;
+  } catch (e) {
+    connectionDetails = "DATABASE_URL (invalid URL format)";
+  }
+} else {
+  connectionDetails = `host: ${process.env.DB_HOST || "localhost"}, database: ${process.env.DB_NAME || "bloom_bliss"}`;
+}
+
+console.log(`🔌 Initializing PostgreSQL Pool...`);
+console.log(`   Target : ${connectionDetails}`);
+if (!hasDatabaseUrl && isProduction) {
+  console.warn(`⚠️  WARNING: DATABASE_URL is not set in production! Falling back to individual credentials.`);
+}
+
+// Config setup
+const poolConfig = hasDatabaseUrl
   ? {
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false },
     }
   : {
-      host: process.env.DB_HOST,
-      port: parseInt(process.env.DB_PORT, 10),
-      database: process.env.DB_NAME,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
+      host: process.env.DB_HOST || "localhost",
+      port: parseInt(process.env.DB_PORT, 10) || 5432,
+      database: process.env.DB_NAME || "bloom_bliss",
+      user: process.env.DB_USER || "postgres",
+      password: process.env.DB_PASSWORD || "postgres",
     };
 
 const pool = new Pool(poolConfig);
 
-// Test connection properly
+// Test connection properly with detailed logs
 const testDB = async () => {
   try {
     await pool.query("SELECT 1");
-    console.log("✅ Connected to PostgreSQL database");
+    console.log("✅ Connected to PostgreSQL database successfully");
   } catch (err) {
-    console.error("❌ Database connection failed:", err.message);
+    console.error("❌ Database connection failed.");
+    console.error(`   Error Message : ${err.message || err}`);
+    console.error(`   Error Code    : ${err.code || "N/A"}`);
+    if (err.stack) {
+      console.error(`   Error Stack   : ${err.stack}`);
+    }
   }
 };
 
@@ -31,7 +58,7 @@ testDB();
 
 // Error handler
 pool.on("error", (err) => {
-  console.error("❌ Unexpected PostgreSQL error:", err.message);
+  console.error("❌ Unexpected PostgreSQL error:", err.message || err);
   process.exit(-1);
 });
 
@@ -39,8 +66,9 @@ pool.on("error", (err) => {
  * Initialise DB
  */
 const initDB = async () => {
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -105,9 +133,18 @@ const initDB = async () => {
 
     console.log("✅ Tables checked and updated successfully");
   } catch (err) {
-    console.error("❌ DB Init Error:", err.message);
+    console.error("❌ DB Init Error:");
+    console.error(`   Error Message : ${err.message || err}`);
+    console.error(`   Error Code    : ${err.code || "N/A"}`);
+    if (err.stack) {
+      console.error(`   Error Stack   : ${err.stack}`);
+    }
+    // Re-throw so server.js is notified of initialization failure
+    throw err;
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
 
